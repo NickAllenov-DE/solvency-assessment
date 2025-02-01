@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Docker
+*.log
+docker-compose.override.yml
+.env
+*.pid
+
+# Airflow
+logs/
+dags/__pycache__/
+plugins/__pycache__/
+
+# PostgreSQL
+postgres-data/
+
+# MinIO
+minio/
+
+# MLflow
+mlruns/
+mlflow/.trash
+
+# Superset
+superset_home/
+
+# Jupyter (если используется)
+.ipynb_checkpoints/

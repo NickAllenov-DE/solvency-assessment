@@ -1,0 +1,309 @@
+
+# x-airflow-common:
+#   &airflow-common
+#   image: apache/airflow:latest
+#   environment:
+#     AIRFLOW__CORE__EXECUTOR: LocalExecutor
+#     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+#     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+#     AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: "false"
+#     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+#     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+#     AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+#   volumes:
+#     - ./dags:/opt/airflow/dags
+#     - ./logs:/opt/airflow/logs
+#     - ./plugins:/opt/airflow/plugins
+#     - ./data:/opt/airflow/data
+#   user: "${AIRFLOW_UID:-50000}:0"
+#   depends_on:
+#     postgres:
+#       condition: service_healthy
+
+# services:
+#   postgres:
+#     image: postgres:latest
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: airflow
+#     volumes:
+#       - postgres-data:/var/lib/postgresql/data
+#       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+#     healthcheck:
+#       test: ["CMD", "pg_isready", "-U", "airflow"]
+#       interval: 10s
+#       retries: 5
+#       start_period: 5s
+#     restart: always
+
+#   airflow-webserver:
+#     <<: *airflow-common
+#     command: webserver
+#     ports:
+#       - "8080:8080"
+#     healthcheck:
+#       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 5
+#       start_period: 30s
+#     restart: always
+
+#   airflow-scheduler:
+#     <<: *airflow-common
+#     command: scheduler
+#     restart: always
+
+#   airflow-init:
+#     <<: *airflow-common
+#     entrypoint: /bin/bash
+#     command:
+#       - -c
+#       - |
+#         airflow db init
+#         airflow users create \
+#           --username admin \
+#           --password admin \
+#           --firstname Admin \
+#           --lastname User \
+#           --role Admin \
+#           --email admin@example.com
+#     user: "0:0"
+#     restart: "no"
+
+#   minio:
+#     image: minio/minio:latest
+#     command: server /data --console-address ":9001"
+#     environment:
+#       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+#       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+#     ports:
+#       - "9000:9000"
+#       - "9001:9001"
+#     volumes:
+#       - ./minio:/data
+#     healthcheck:
+#       test: ["CMD", "curl", "--fail", "http://minio:9000/minio/health/live"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 3
+#     restart: always
+
+#   minio-create-bucket:
+#     image: minio/mc
+#     depends_on:
+#       minio:
+#         condition: service_healthy
+#     entrypoint: >
+#       bash -c "
+#       mc alias set minio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+#       if ! mc ls minio | grep --quiet mlflow; then
+#         mc mb minio/mlflow &&
+#         echo 'Bucket created'
+#       else
+#         echo 'Bucket already exists'
+#       fi
+#       "
+
+#   mlflow:
+#     image: ghcr.io/mlflow/mlflow:latest
+#     container_name: mlflow
+#     ports:
+#       - "5000:5000"
+#     environment:
+#       MLFLOW_TRACKING_URI: http://0.0.0.0:5000
+#       MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres/mlflow
+#       MLFLOW_ARTIFACT_ROOT: s3://mlflow/
+#       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+#       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+#       MLFLOW_S3_ENDPOINT_URL: http://minio:9000 
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       minio:
+#         condition: service_healthy
+#     restart: always
+
+#   superset:
+#     image: apache/superset:latest
+#     container_name: superset
+#     ports:
+#       - "8088:8088"
+#     environment:
+#       SUPERSET_ENV: production
+#       SUPERSET_LOAD_EXAMPLES: "no"
+#       SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+#       SUPERSET_DATABASE_URL: postgresql+psycopg2://superset:superset@postgres/superset
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     command: >
+#       /bin/bash -c "
+#       superset db upgrade &&
+#       superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@example.com --password admin &&
+#       superset init &&
+#       superset run -h 0.0.0.0 -p 8088
+#       "
+
+# volumes:
+#   postgres-data:
+#   minio:
+
+
+
+
+
+x-airflow-common:
+  &airflow-common
+  image: apache/airflow:latest
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: "false"
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+    AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+    - ./data:/opt/airflow/data
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db init
+        airflow users create \
+          --username admin \
+          --password admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com
+    user: "0:0"
+    restart: "no"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://minio:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: always
+
+  minio-create-bucket:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      bash -c "
+      mc alias set minio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
+      if ! mc ls minio | grep --quiet mlflow; then
+        mc mb minio/mlflow &&
+        echo 'Bucket created'
+      else
+        echo 'Bucket already exists'
+      fi
+      "
+
+  mlflow:
+    build:
+      context: ./mlflow
+      dockerfile: Dockerfile
+    container_name: mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_TRACKING_URI: http://0.0.0.0:5000
+      MLFLOW_BACKEND_STORE_URI: postgresql+psycopg2://mlflow:mlflow@postgres/mlflow
+      MLFLOW_ARTIFACT_ROOT: s3://mlflow/
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: always
+    entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
+
+  superset:
+    image: apache/superset:latest
+    container_name: superset
+    ports:
+      - "8088:8088"
+    environment:
+      SUPERSET_ENV: production
+      SUPERSET_LOAD_EXAMPLES: "no"
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_DATABASE_URL: postgresql+psycopg2://superset:superset@postgres/superset
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      /bin/bash -c "
+      superset db upgrade &&
+      superset fab create-admin --username admin --firstname Superset --lastname Admin --email admin@example.com --password admin &&
+      superset init &&
+      superset run -h 0.0.0.0 -p 8088
+      "
+
+volumes:
+  postgres-data:
+  minio:
